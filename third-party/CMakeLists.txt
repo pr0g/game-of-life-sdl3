@@ -67,10 +67,21 @@ ExternalProject_Add(
              -DMC_GOL_SHARED=ON
   CMAKE_CACHE_ARGS -DCMAKE_DEBUG_POSTFIX:STRING=d)
 
+ExternalProject_Add(
+  imgui.cmake
+  GIT_REPOSITORY https://github.com/pr0g/imgui.cmake.git
+  GIT_TAG b9ac9f6ed8becb5473bcb8c8b9fb19d3312c3af8
+  PREFIX ${PREFIX_DIR}/imgui
+  BINARY_DIR ${PREFIX_DIR}/imgui.cmake/build/${build_type_dir}
+  INSTALL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/install
+  CMAKE_ARGS ${build_type_arg} -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+             -DIMGUI_DISABLE_OBSOLETE_FUNCTIONS=ON
+  CMAKE_CACHE_ARGS -DCMAKE_DEBUG_POSTFIX:STRING=d)
+
 if(SUPERBUILD AND NOT PROJECT_IS_TOP_LEVEL)
   ExternalProject_Add(
     ${CMAKE_PROJECT_NAME}_superbuild
-    DEPENDS SDL3 mc-array mc-gol
+    DEPENDS SDL3 mc-array mc-gol imgui.cmake
     SOURCE_DIR ${CMAKE_SOURCE_DIR}
     BINARY_DIR ${CMAKE_BINARY_DIR}
     CMAKE_ARGS -DCMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH} -DSUPERBUILD=OFF
