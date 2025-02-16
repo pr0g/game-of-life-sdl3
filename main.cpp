@@ -193,7 +193,28 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
       SDL_RenderFillRect(renderer, &cell);
     }
   }
-  
+
+  for (int32_t y = 0, height = mc_gol_board_height(game_of_life->board_);
+       y <= height; y++) {
+    SDL_SetRenderDrawColor(renderer, 180, 180, 180, 1);
+    SDL_RenderLine(
+      renderer, board_top_left_corner.x,
+      board_top_left_corner.y + y * cell_size,
+      board_top_left_corner.x
+        + cell_size * mc_gol_board_width(game_of_life->board_),
+      board_top_left_corner.y + y * cell_size);
+  }
+
+  for (int32_t x = 0, width = mc_gol_board_width(game_of_life->board_);
+       x <= width; x++) {
+    SDL_SetRenderDrawColor(renderer, 180, 180, 180, 1);
+    SDL_RenderLine(
+      renderer, board_top_left_corner.x + x * cell_size,
+      board_top_left_corner.y, board_top_left_corner.x + x * cell_size,
+      board_top_left_corner.y
+        + cell_size * mc_gol_board_height(game_of_life->board_));
+  }
+
   game_of_life->timer_ += delta_time;
   if (game_of_life->timer_ >= delay) {
     mc_gol_update_board(game_of_life->board_);
