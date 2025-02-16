@@ -8,10 +8,19 @@
 #include <memory>
 #include <numeric>
 
+#include <as/as-math-ops.hpp>
 #include <minimal-cmake-gol/gol.h>
 
 struct game_of_life_t {
   mc_gol_board_t* board_ = nullptr;
+  double timer_ = 0.0;
+};
+
+struct color_t {
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
+  uint8_t a;
 };
 
 static SDL_Window* window = nullptr;
@@ -25,6 +34,9 @@ static char debug_string[32];
 constexpr double seconds_per_frame = 1.0 / 60.0;
 constexpr int64_t nanoseconds_per_frame =
   static_cast<int64_t>(seconds_per_frame * 1.0e9);
+
+const double delay = 0.1;
+const as::vec2i screen_dimensions = as::vec2i{800, 600};
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
   SDL_SetAppMetadata("Game of Life", "1.0", "com.minimal-cmake.game-of-life");
@@ -141,6 +153,8 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   const uint64_t delta = now - g_prev;
   g_prev = now;
 
+  const double delta_time = delta * 1.0e-9;
+
   const int64_t window = fps::calculateWindow(g_fps, SDL_GetTicksNS());
   double framerate =
     window > -1 ? (double)(g_fps.MaxSamples - 1) / (double(window) * 1.0e-9)
@@ -152,14 +166,43 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
   SDL_SetRenderDrawColorFloat(
     renderer, 0.5f, 0.5f, 0.5f, SDL_ALPHA_OPAQUE_FLOAT);
-
-  /* clear the window to the draw color. */
   SDL_RenderClear(renderer);
+
+  const float cell_size = 15.0f;
+  const auto board_top_left_corner = as::vec2(
+    (screen_dimensions.x / 2.0f)
+      - (mc_gol_board_width(game_of_life->board_) * cell_size) * 0.5f,
+    (screen_dimensions.y / 2.0f)
+      - (mc_gol_board_height(game_of_life->board_) * cell_size) * 0.5f);
+  for (int32_t y = 0, height = mc_gol_board_height(game_of_life->board_);
+       y < height; y++) {
+    for (int32_t x = 0, width = mc_gol_board_width(game_of_life->board_);
+         x < width; x++) {
+      const as::vec2 cell_position =
+        board_top_left_corner + as::vec2(x * cell_size, y * cell_size);
+      const color_t cell_color =
+        mc_gol_board_cell(game_of_life->board_, x, y)
+          ? color_t{.r = 255, .g = 255, .b = 255, .a = 255}
+          : color_t{.a = 255};
+      SDL_SetRenderDrawColor(
+        renderer, cell_color.r, cell_color.g, cell_color.b, cell_color.a);
+      const SDL_FRect cell = (SDL_FRect){.x = cell_position.x,
+                                         .y = cell_position.y,
+                                         .w = cell_size,
+                                         .h = cell_size};
+      SDL_RenderFillRect(renderer, &cell);
+    }
+  }
+  
+  game_of_life->timer_ += delta_time;
+  if (game_of_life->timer_ >= delay) {
+    mc_gol_update_board(game_of_life->board_);
+    game_of_life->timer_ = 0.0;
+  }
 
   SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
   SDL_RenderDebugText(renderer, 5, 5, debug_string);
 
-  /* put the newly-cleared rendering on the screen. */
   SDL_RenderPresent(renderer);
 
   return SDL_APP_CONTINUE;
