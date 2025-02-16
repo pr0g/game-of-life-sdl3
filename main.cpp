@@ -47,7 +47,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
   }
 
   if (!SDL_CreateWindowAndRenderer(
-        "Breakout Clone", 800, 600, 0, &window, &renderer)) {
+        "Game of Life", 800, 600, 0, &window, &renderer)) {
     SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
     return SDL_APP_FAILURE;
   }
