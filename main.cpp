@@ -32,11 +32,9 @@ struct color_t {
 static SDL_Window* window = nullptr;
 static SDL_Renderer* renderer = nullptr;
 
-static int64_t g_prev = 0;
 fps::Fps g_fps;
+static int64_t g_prev = 0;
 const int32_t g_cell_size = 15;
-
-static char debug_string[32];
 
 constexpr double seconds_per_frame = 1.0 / 60.0;
 constexpr int64_t nanoseconds_per_frame =
@@ -113,51 +111,6 @@ static void reset_board(mc_gol_board_t* board) {
   mc_gol_set_board_cell(board, 35, 25, true);
 }
 
-void wait_to_update(const int64_t now) {
-  // reference: https://davidgow.net/handmadepenguin/ch18.html
-  const int64_t frame_nanoseconds = now - g_prev;
-  if (frame_nanoseconds < nanoseconds_per_frame) {
-    const int64_t remainder_ns = nanoseconds_per_frame - frame_nanoseconds;
-    const int64_t remainder_pad_ns = std::max(
-      remainder_ns - static_cast<int64_t>(4 * SDL_NS_PER_MS),
-      static_cast<int64_t>(0));
-    SDL_DelayNS(static_cast<uint64_t>(remainder_pad_ns));
-    const int64_t nanoseconds_since = SDL_GetTicksNS() - g_prev;
-    const int64_t nanoseconds_left = nanoseconds_per_frame - nanoseconds_since;
-    // if (nanoseconds_left < 0) {
-    //   SDL_Log("nanonseconds left %" SDL_PRIs64, nanoseconds_left);
-    // }
-    // check we didn't wait too long and get behind
-    // assert(nanoseconds_since < nanoseconds_per_frame);
-    while (SDL_GetTicksNS() - g_prev < nanoseconds_per_frame) {
-      ;
-    }
-  }
-}
-
-// int main(int argc, char** argv) {
-//   (void)argc;
-//   (void)argv;
-
-//   if (!SDL_Init(SDL_INIT_VIDEO)) {
-//     fprintf(
-//       stderr, "SDL could not initialize. SDL_Error: %s\n", SDL_GetError());
-//     return 1;
-//   }
-
-//   SDL_Window* window = SDL_CreateWindow(argv[0], 800, 600, 0);
-
-//   for (bool running = true; running;) {
-//     for (SDL_Event current_event; SDL_PollEvent(&current_event) != 0;) {
-//       if (current_event.type == SDL_EVENT_MOUSE_MOTION) {
-//         SDL_MouseMotionEvent* mouse_motion =
-//           (SDL_MouseMotionEvent*)&current_event;
-//         SDL_Log("mouse motion %f, %f", mouse_motion->x, mouse_motion->y);
-//       }
-//     }
-//   }
-// }
-
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
   SDL_SetAppMetadata("Game of Life", "1.0", "com.minimal-cmake.game-of-life");
 
@@ -172,18 +125,12 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     return SDL_APP_FAILURE;
   }
 
-  SDL_SetRenderVSync(renderer, SDL_RENDERER_VSYNC_DISABLED);
-
-  debug_string[0] = '\0';
-
-  mc_gol_board_t* board = mc_gol_create_board(40, 27);
-
-  reset_board(board);
+  SDL_SetRenderVSync(renderer, 1); // enable vsync
 
   auto game_of_life = std::make_unique<game_of_life_t>();
-
+  mc_gol_board_t* board = mc_gol_create_board(40, 27);
   game_of_life->board_ = board;
-
+  reset_board(board);
   *appstate = game_of_life.release();
 
   ImGui::CreateContext();
@@ -197,23 +144,11 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
   const uint64_t now = SDL_GetTicksNS();
-  wait_to_update(now);
-  const double now_fp = static_cast<double>(now) / 1.0e-9;
   const uint64_t delta = now - g_prev;
   g_prev = now;
-
   const double delta_time = delta * 1.0e-9;
 
-  const int64_t window = fps::calculateWindow(g_fps, SDL_GetTicksNS());
-  double framerate =
-    window > -1 ? (double)(g_fps.MaxSamples - 1) / (double(window) * 1.0e-9)
-                : 0.0;
-
   auto game_of_life = static_cast<game_of_life_t*>(appstate);
-
-  SDL_snprintf(
-    debug_string, sizeof(debug_string), "%d %d", game_of_life->mouse_now_.x,
-    game_of_life->mouse_now_.y);
 
   const auto step_board = [game_of_life] {
     mc_gol_update_board(game_of_life->board_);
@@ -311,7 +246,6 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   }
 
   SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-  SDL_RenderDebugText(renderer, 5, 5, debug_string);
 
   ImGui::Render();
   ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
@@ -346,10 +280,8 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
               - (mc_gol_board_height(game_of_life->board_) * g_cell_size)
                   * 0.5f);
           const as::vec2i position = game_of_life->mouse_now_;
-          SDL_Log("mouse motion %d, %d", position.x, position.y);
           const as::vec2i cell_position =
             board_top_left_corner + as::vec2i(x * g_cell_size, y * g_cell_size);
-          SDL_Log("cell_position %d, %d", cell_position.x, cell_position.y);
           if (
             position.x > cell_position.x
             && position.x <= cell_position.x + g_cell_size
@@ -367,6 +299,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
   if (event->type == SDL_EVENT_QUIT) {
     return SDL_APP_SUCCESS;
   }
+
   return SDL_APP_CONTINUE;
 }
 
