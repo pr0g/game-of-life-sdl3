@@ -53,11 +53,10 @@ ExternalProject_Add(
   CMAKE_ARGS ${build_type_arg} -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
   CMAKE_CACHE_ARGS -DCMAKE_DEBUG_POSTFIX:STRING=d)
 
+ExternalProject_Get_Property(mc-array SOURCE_DIR)
 ExternalProject_Add(
   mc-gol
-  GIT_REPOSITORY https://github.com/PacktPublishing/Minimal-CMake.git
-  GIT_TAG e996199b2f7527b8f0ac8ef3ca44b358d245edbd
-  GIT_SHALLOW TRUE
+  URL "file://${SOURCE_DIR}"
   DEPENDS mc-array
   PREFIX ${PREFIX_DIR}/mc-gol
   SOURCE_SUBDIR ch11/part-4/lib/gol
