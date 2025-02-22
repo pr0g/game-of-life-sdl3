@@ -19,6 +19,7 @@ struct game_of_life_t {
   float delay_ = 0.1f;
   bool simulating_ = true;
   as::vec2i mouse_now_;
+  int32_t cell_size_ = 15;
 };
 
 struct color_t {
@@ -28,16 +29,12 @@ struct color_t {
   uint8_t a;
 };
 
-static SDL_Window* window = nullptr;
-static SDL_Renderer* renderer = nullptr;
-
+// mutable globals
+static SDL_Window* g_window = nullptr;
+static SDL_Renderer* g_renderer = nullptr;
 static int64_t g_prev = 0;
-const int32_t g_cell_size = 15;
 
-constexpr double seconds_per_frame = 1.0 / 60.0;
-constexpr int64_t nanoseconds_per_frame =
-  static_cast<int64_t>(seconds_per_frame * 1.0e9);
-
+// constants
 const as::vec2i screen_dimensions = as::vec2i{800, 600};
 
 static void clear_board(mc_gol_board_t* board) {
@@ -118,12 +115,12 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
   }
 
   if (!SDL_CreateWindowAndRenderer(
-        "Game of Life", 800, 600, 0, &window, &renderer)) {
+        "Game of Life", 800, 600, 0, &g_window, &g_renderer)) {
     SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
     return SDL_APP_FAILURE;
   }
 
-  SDL_SetRenderVSync(renderer, 1); // enable vsync
+  SDL_SetRenderVSync(g_renderer, 1); // enable vsync
 
   auto game_of_life = std::make_unique<game_of_life_t>();
   mc_gol_board_t* board = mc_gol_create_board(40, 27);
@@ -134,19 +131,21 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
   ImGui::CreateContext();
   ImGui::StyleColorsLight();
 
-  ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
-  ImGui_ImplSDLRenderer3_Init(renderer);
+  ImGui_ImplSDL3_InitForSDLRenderer(g_window, g_renderer);
+  ImGui_ImplSDLRenderer3_Init(g_renderer);
 
   return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
+  auto game_of_life = static_cast<game_of_life_t*>(appstate);
+
   const uint64_t now = SDL_GetTicksNS();
   const uint64_t delta = now - g_prev;
   g_prev = now;
-  const double delta_time = delta * 1.0e-9;
 
-  auto game_of_life = static_cast<game_of_life_t*>(appstate);
+  const double delta_time = delta * 1.0e-9;
+  game_of_life->timer_ += delta_time;
 
   const auto step_board = [game_of_life] {
     mc_gol_update_board(game_of_life->board_);
@@ -157,8 +156,8 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
 
-  SDL_SetRenderDrawColor(renderer, 242, 242, 242, SDL_ALPHA_OPAQUE);
-  SDL_RenderClear(renderer);
+  SDL_SetRenderDrawColor(g_renderer, 242, 242, 242, SDL_ALPHA_OPAQUE);
+  SDL_RenderClear(g_renderer);
 
   ImGui::Begin("Game of Life");
   ImGui::PushItemWidth(100.0f);
@@ -190,63 +189,62 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   }
   ImGui::End();
 
+  const auto cell_size = game_of_life->cell_size_;
   const auto board_top_left_corner = as::vec2(
     (screen_dimensions.x / 2.0f)
-      - (mc_gol_board_width(game_of_life->board_) * g_cell_size) * 0.5f,
+      - (mc_gol_board_width(game_of_life->board_) * cell_size) * 0.5f,
     (screen_dimensions.y / 2.0f)
-      - (mc_gol_board_height(game_of_life->board_) * g_cell_size) * 0.5f);
+      - (mc_gol_board_height(game_of_life->board_) * cell_size) * 0.5f);
   for (int32_t y = 0, height = mc_gol_board_height(game_of_life->board_);
        y < height; y++) {
     for (int32_t x = 0, width = mc_gol_board_width(game_of_life->board_);
          x < width; x++) {
       const as::vec2 cell_position =
-        board_top_left_corner + as::vec2(x * g_cell_size, y * g_cell_size);
+        board_top_left_corner + as::vec2(x * cell_size, y * cell_size);
       const color_t cell_color =
         mc_gol_board_cell(game_of_life->board_, x, y)
           ? color_t{.r = 242, .g = 181, .b = 105, .a = 255}
           : color_t{.r = 84, .g = 122, .b = 171, .a = 255};
       SDL_SetRenderDrawColor(
-        renderer, cell_color.r, cell_color.g, cell_color.b, cell_color.a);
+        g_renderer, cell_color.r, cell_color.g, cell_color.b, cell_color.a);
       const SDL_FRect cell = (SDL_FRect){.x = cell_position.x,
                                          .y = cell_position.y,
-                                         .w = g_cell_size,
-                                         .h = g_cell_size};
-      SDL_RenderFillRect(renderer, &cell);
+                                         .w = static_cast<float>(cell_size),
+                                         .h = static_cast<float>(cell_size)};
+      SDL_RenderFillRect(g_renderer, &cell);
     }
   }
 
-  SDL_SetRenderDrawColor(renderer, 39, 61, 113, 255);
+  SDL_SetRenderDrawColor(g_renderer, 39, 61, 113, 255);
   for (int32_t y = 0, height = mc_gol_board_height(game_of_life->board_);
        y <= height; y++) {
     SDL_RenderLine(
-      renderer, board_top_left_corner.x,
-      board_top_left_corner.y + y * g_cell_size,
+      g_renderer, board_top_left_corner.x,
+      board_top_left_corner.y + y * cell_size,
       board_top_left_corner.x
-        + g_cell_size * mc_gol_board_width(game_of_life->board_),
-      board_top_left_corner.y + y * g_cell_size);
+        + cell_size * mc_gol_board_width(game_of_life->board_),
+      board_top_left_corner.y + y * cell_size);
   }
-
   for (int32_t x = 0, width = mc_gol_board_width(game_of_life->board_);
        x <= width; x++) {
     SDL_RenderLine(
-      renderer, board_top_left_corner.x + x * g_cell_size,
-      board_top_left_corner.y, board_top_left_corner.x + x * g_cell_size,
+      g_renderer, board_top_left_corner.x + x * cell_size,
+      board_top_left_corner.y, board_top_left_corner.x + x * cell_size,
       board_top_left_corner.y
-        + g_cell_size * mc_gol_board_height(game_of_life->board_));
+        + cell_size * mc_gol_board_height(game_of_life->board_));
   }
 
-  game_of_life->timer_ += delta_time;
   if (
     game_of_life->simulating_ && game_of_life->timer_ >= game_of_life->delay_) {
     step_board();
   }
 
-  SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+  SDL_SetRenderDrawColor(g_renderer, 255, 255, 255, 255);
 
   ImGui::Render();
-  ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
+  ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), g_renderer);
 
-  SDL_RenderPresent(renderer);
+  SDL_RenderPresent(g_renderer);
 
   return SDL_APP_CONTINUE;
 }
@@ -263,26 +261,24 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
   if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
     SDL_MouseButtonEvent* mouse_button = (SDL_MouseButtonEvent*)event;
     if (mouse_button->button == SDL_BUTTON_LEFT) {
-      for (int32_t y = 0,
-                   board_height = mc_gol_board_height(game_of_life->board_);
-           y < board_height; y++) {
-        for (int32_t x = 0,
-                     board_width = mc_gol_board_width(game_of_life->board_);
-             x < board_width; x++) {
+      const auto cell_size = game_of_life->cell_size_;
+      const int32_t board_height = mc_gol_board_height(game_of_life->board_);
+      const int32_t board_width = mc_gol_board_width(game_of_life->board_);
+      for (int32_t y = 0; y < board_height; y++) {
+        for (int32_t x = 0; x < board_width; x++) {
           const auto board_top_left_corner = as::vec2i(
             (screen_dimensions.x / 2.0f)
-              - (mc_gol_board_width(game_of_life->board_) * g_cell_size) * 0.5f,
+              - (mc_gol_board_width(game_of_life->board_) * cell_size) * 0.5f,
             (screen_dimensions.y / 2.0f)
-              - (mc_gol_board_height(game_of_life->board_) * g_cell_size)
-                  * 0.5f);
+              - (mc_gol_board_height(game_of_life->board_) * cell_size) * 0.5f);
           const as::vec2i position = game_of_life->mouse_now_;
           const as::vec2i cell_position =
-            board_top_left_corner + as::vec2i(x * g_cell_size, y * g_cell_size);
+            board_top_left_corner + as::vec2i(x * cell_size, y * cell_size);
           if (
             position.x > cell_position.x
-            && position.x <= cell_position.x + g_cell_size
+            && position.x <= cell_position.x + cell_size
             && position.y > cell_position.y
-            && position.y <= cell_position.y + g_cell_size) {
+            && position.y <= cell_position.y + cell_size) {
             mc_gol_set_board_cell(
               game_of_life->board_, x, y,
               !mc_gol_board_cell(game_of_life->board_, x, y));
