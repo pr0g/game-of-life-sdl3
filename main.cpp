@@ -2,7 +2,6 @@
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL_main.h>
 
-#include "fps.h"
 #include "imgui/imgui_impl_sdl3.h"
 #include "imgui/imgui_impl_sdlrenderer3.h"
 
@@ -32,7 +31,6 @@ struct color_t {
 static SDL_Window* window = nullptr;
 static SDL_Renderer* renderer = nullptr;
 
-fps::Fps g_fps;
 static int64_t g_prev = 0;
 const int32_t g_cell_size = 15;
 
@@ -159,8 +157,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
 
-  SDL_SetRenderDrawColorFloat(
-    renderer, 0.5f, 0.5f, 0.5f, SDL_ALPHA_OPAQUE_FLOAT);
+  SDL_SetRenderDrawColor(renderer, 242, 242, 242, SDL_ALPHA_OPAQUE);
   SDL_RenderClear(renderer);
 
   ImGui::Begin("Game of Life");
@@ -206,8 +203,8 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         board_top_left_corner + as::vec2(x * g_cell_size, y * g_cell_size);
       const color_t cell_color =
         mc_gol_board_cell(game_of_life->board_, x, y)
-          ? color_t{.r = 255, .g = 255, .b = 255, .a = 255}
-          : color_t{.a = 255};
+          ? color_t{.r = 242, .g = 181, .b = 105, .a = 255}
+          : color_t{.r = 84, .g = 122, .b = 171, .a = 255};
       SDL_SetRenderDrawColor(
         renderer, cell_color.r, cell_color.g, cell_color.b, cell_color.a);
       const SDL_FRect cell = (SDL_FRect){.x = cell_position.x,
@@ -218,9 +215,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     }
   }
 
+  SDL_SetRenderDrawColor(renderer, 39, 61, 113, 255);
   for (int32_t y = 0, height = mc_gol_board_height(game_of_life->board_);
        y <= height; y++) {
-    SDL_SetRenderDrawColor(renderer, 180, 180, 180, 1);
     SDL_RenderLine(
       renderer, board_top_left_corner.x,
       board_top_left_corner.y + y * g_cell_size,
@@ -231,7 +228,6 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
   for (int32_t x = 0, width = mc_gol_board_width(game_of_life->board_);
        x <= width; x++) {
-    SDL_SetRenderDrawColor(renderer, 180, 180, 180, 1);
     SDL_RenderLine(
       renderer, board_top_left_corner.x + x * g_cell_size,
       board_top_left_corner.y, board_top_left_corner.x + x * g_cell_size,
