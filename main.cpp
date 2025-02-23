@@ -18,8 +18,9 @@ struct game_of_life_t {
   double timer_ = 0.0;
   float delay_ = 0.1f;
   float cell_size_ = 15.0f;
-  as::vec2 mouse_now_;
+  bool additive_ = true;
   bool simulating_ = true;
+  bool pressing_ = false;
 };
 
 struct color_t {
@@ -45,6 +46,15 @@ static void clear_board(mc_gol_board_t* board) {
       mc_gol_set_board_cell(board, x, y, false);
     }
   }
+}
+
+static as::vec2 board_top_left_corner(
+  mc_gol_board_t* board, const float cell_size) {
+  return as::vec2(
+    (static_cast<float>(screen_dimensions.x) * 0.5f)
+      - (mc_gol_board_width(board) * cell_size) * 0.5f,
+    (static_cast<float>(screen_dimensions.y) * 0.5f)
+      - (mc_gol_board_height(board) * cell_size) * 0.5f);
 }
 
 static void reset_board(mc_gol_board_t* board) {
@@ -106,13 +116,23 @@ static void reset_board(mc_gol_board_t* board) {
   mc_gol_set_board_cell(board, 35, 25, true);
 }
 
-static as::vec2 board_top_left_corner(
-  mc_gol_board_t* board, const float cell_size) {
-  return as::vec2(
-    (static_cast<float>(screen_dimensions.x) * 0.5f)
-      - (mc_gol_board_width(board) * cell_size) * 0.5f,
-    (static_cast<float>(screen_dimensions.y) * 0.5f)
-      - (mc_gol_board_height(board) * cell_size) * 0.5f);
+static void toggle_cell(
+  game_of_life_t* game_of_life, const as::vec2& position) {
+  const auto cell_size = game_of_life->cell_size_;
+  const auto top_left = board_top_left_corner(game_of_life->board_, cell_size);
+  const int32_t board_height = mc_gol_board_height(game_of_life->board_);
+  const int32_t board_width = mc_gol_board_width(game_of_life->board_);
+  for (int32_t y = 0; y < board_height; y++) {
+    for (int32_t x = 0; x < board_width; x++) {
+      const as::vec2 cell = top_left + as::vec2(x * cell_size, y * cell_size);
+      if (
+        position.x > cell.x && position.x <= cell.x + cell_size
+        && position.y > cell.y && position.y <= cell.y + cell_size) {
+        mc_gol_set_board_cell(
+          game_of_life->board_, x, y, game_of_life->additive_);
+      }
+    }
+  }
 }
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
@@ -195,6 +215,7 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
       clear_board(game_of_life->board_);
       reset_board(game_of_life->board_);
     }
+    ImGui::Checkbox("Additive", &game_of_life->additive_);
   }
   ImGui::End();
 
@@ -257,34 +278,28 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
   auto* game_of_life = static_cast<game_of_life_t*>(appstate);
   if (event->type == SDL_EVENT_MOUSE_MOTION) {
     SDL_MouseMotionEvent* mouse_motion = (SDL_MouseMotionEvent*)event;
-    game_of_life->mouse_now_ = as::vec2(mouse_motion->x, mouse_motion->y);
+    if (game_of_life->pressing_) {
+      toggle_cell(game_of_life, as::vec2(mouse_motion->x, mouse_motion->y));
+    }
   }
 
   if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
     SDL_MouseButtonEvent* mouse_button = (SDL_MouseButtonEvent*)event;
     if (mouse_button->button == SDL_BUTTON_LEFT) {
-      const auto cell_size = game_of_life->cell_size_;
-      const auto top_left =
-        board_top_left_corner(game_of_life->board_, cell_size);
-      const int32_t board_height = mc_gol_board_height(game_of_life->board_);
-      const int32_t board_width = mc_gol_board_width(game_of_life->board_);
-      for (int32_t y = 0; y < board_height; y++) {
-        for (int32_t x = 0; x < board_width; x++) {
-          const as::vec2 position = game_of_life->mouse_now_;
-          const as::vec2 cell_position =
-            top_left + as::vec2(x * cell_size, y * cell_size);
-          if (
-            position.x > cell_position.x
-            && position.x <= cell_position.x + cell_size
-            && position.y > cell_position.y
-            && position.y <= cell_position.y + cell_size) {
-            mc_gol_set_board_cell(
-              game_of_life->board_, x, y,
-              !mc_gol_board_cell(game_of_life->board_, x, y));
-          }
-        }
-      }
+      game_of_life->pressing_ = true;
+      toggle_cell(game_of_life, as::vec2(mouse_button->x, mouse_button->y));
     }
+  }
+
+  if (event->type == SDL_EVENT_MOUSE_BUTTON_UP) {
+    SDL_MouseButtonEvent* mouse_button = (SDL_MouseButtonEvent*)event;
+    if (mouse_button->button == SDL_BUTTON_LEFT) {
+      game_of_life->pressing_ = false;
+    }
+  }
+
+  if (event->type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+    game_of_life->pressing_ = false;
   }
 
   if (event->type == SDL_EVENT_QUIT) {
